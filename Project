@@ -1,0 +1,69 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder, StandardScaler
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score, roc_curve
+import shap
+
+# Load dataset
+df = pd.read_csv("churn.csv")
+
+# Drop non-informative columns
+df.drop(columns=['CustomerID'], inplace=True)
+
+# Encode categorical columns
+categorical_cols = ['Gender', 'Subscription Type', 'Contract Length']
+df_encoded = pd.get_dummies(df, columns=categorical_cols, drop_first=True)
+
+# Features and target
+X = df_encoded.drop("Churn", axis=1)
+y = df_encoded["Churn"]
+
+# Train-test split
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Feature scaling
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
+
+# Train Random Forest
+model = RandomForestClassifier(n_estimators=100, random_state=42)
+model.fit(X_train_scaled, y_train)
+
+# Predictions
+y_pred = model.predict(X_test_scaled)
+y_prob = model.predict_proba(X_test_scaled)[:, 1]
+
+# Evaluation
+print("Classification Report:\n", classification_report(y_test, y_pred))
+print("Confusion Matrix:\n", confusion_matrix(y_test, y_pred))
+print("ROC AUC Score:", roc_auc_score(y_test, y_prob))
+
+# ROC Curve
+fpr, tpr, _ = roc_curve(y_test, y_prob)
+plt.plot(fpr, tpr, label="Random Forest")
+plt.plot([0,1], [0,1], linestyle='--')
+plt.xlabel("False Positive Rate")
+plt.ylabel("True Positive Rate")
+plt.title("ROC Curve")
+plt.legend()
+plt.show()
+
+# Feature Importance
+importances = model.feature_importances_
+feat_names = X.columns
+feat_imp = pd.Series(importances, index=feat_names).sort_values(ascending=False)
+plt.figure(figsize=(10,6))
+sns.barplot(x=feat_imp[:10], y=feat_imp.index[:10])
+plt.title("Top 10 Important Features")
+plt.show()
+
+# SHAP for interpretability
+explainer = shap.Explainer(model, X_train_scaled)
+shap_values = explainer(X_test_scaled)
+shap.plots.bar(shap_values)
